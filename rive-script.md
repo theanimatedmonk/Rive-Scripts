@@ -3122,7 +3122,47 @@ Because character is a view model instance, you can access all of its public pro
 self.character.<propertyName>.value
 ```
 
+### What your script input actually holds
 
+The `Input<Data.SomeVm>` field is **only** the view model instance you pick in **Property Group**—not every view model in the file, and not the whole scene. For example, `self.character` is whatever nested property you bound (e.g. `Main` → `character`). If you need a different VM, use another input with the matching `Data.*` type or reach a **child** VM with `getViewModel` (see below).
+
+### If the input does not appear in Property Group
+
+`Input<Data.X>` requires a **View Model definition** in **this** `.riv` file that generates the type `Data.X`. If `Data.X` does not exist (wrong name or no VM yet), Rive may omit the input or report script errors. Rename `X` to match your View Model’s generated name exactly (e.g. `Data.HelmetHMI`, `Data.HUD`).
+
+### Reading and writing properties **by name** (string keys)
+
+On any view model instance (including a bound script input), you can look up properties **by string** using the same API as elsewhere in [Data Binding](/scripting/data-binding):
+
+- `getNumber("name")`, `getBoolean("name")`, `getString("name")`, `getColor("name")`, `getEnum("name")`, `getTrigger("name")`
+- Nested view model: `getViewModel("childName")`
+
+Each getter returns a property object; use `.value` where applicable, and triggers use `:fire()` / `addListener` as documented.
+
+```lua
+local score = self.character:getNumber("score")
+if score then
+  print(score.value)
+  score.value = 100
+end
+
+local hud = self.character:getViewModel("hud")
+if hud then
+  local flag = hud:getBoolean("ready")
+  if flag then flag.value = true end
+end
+```
+
+### Typed field access vs by-name access
+
+- **Dot access** (`self.character.x.value`) uses the **generated** `Data.*` shape: names are fixed in your script like normal Lua fields.
+- **By-name access** (`getNumber("x")`, etc.) uses **runtime strings**—useful when names are dynamic or you want one pattern for many keys.
+
+Both operate on the **same** bound instance; pick whichever fits your tooling and typing needs.
+
+### View models vs artboards drawn from scripts
+
+Nested artboards in the **editor hierarchy** participate in the same data-binding graph as their parent. **Artboard instances** created with `:instance()` inside a node script and drawn in `draw()` are **not** automatically wired to the parent artboard’s view model. To drive them from data, either nest the artboard in the file, or **bridge** in script: read the bound view model (or `context:viewModel()`), then set instance state via the APIs your runtime exposes (e.g. mirroring into `inst.data` if applicable).
 
 
 ---
