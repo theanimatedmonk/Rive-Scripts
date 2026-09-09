@@ -672,9 +672,9 @@ local function setPointer(self: Card3D, event: PointerEvent)
   local maxTilt = num(self.maxTilt, 18)
   local nx = math.clamp(event.position.x / area, -1, 1)
   local ny = math.clamp(event.position.y / area, -1, 1)
-  -- Face the pointer: right → yaw, down → pitch the near edge toward the cursor.
+  -- Face the pointer: right → yaw (unchanged), down → pitch flipped.
   self._tgtY = nx * maxTilt
-  self._tgtX = -ny * maxTilt
+  self._tgtX = ny * maxTilt
   local ctx = self._ctx
   if ctx then
     ctx:markNeedsUpdate()
