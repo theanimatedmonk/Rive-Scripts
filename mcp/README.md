@@ -10,3 +10,4 @@ The scripts themselves live in the Rive cloud file, not in this repo. These docs
 | [debugging-scripts.md](debugging-scripts.md) | How to list scripts, read linter errors, and check the console |
 | [drawcanvas-to-draw.md](drawcanvas-to-draw.md) | `drawCanvas` is gone — move GPU work into `draw` |
 | [early-access-3d-fixes.md](early-access-3d-fixes.md) | Concrete fixes applied in Early Access 3D Scripts |
+| [node-script-viewmodel.md](node-script-viewmodel.md) | Bind a VMI to an artboard cloned inside a node script |
