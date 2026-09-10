@@ -8,7 +8,9 @@
 // Bindings group 0:
 //   0: UBO 208 bytes — mvp, model, edgeColor,
 //      light (angleRad, lightI, glossI, glossSharp 0-1),
-//      params.x = curvature, params.y = ambient 0-1, lightColor = gloss tint,
+//      params.x = curvature, params.y = ambient 0-1,
+//      params.z = 0 card normals / 1 sphere normals (from localPos),
+//      lightColor = gloss tint,
 //      foil (intensity 0-1, stripe count, tilt shift 0-1, angle rad)
 //   1: face texture
 //   2: sampler
@@ -61,7 +63,9 @@ fn fs_main(f: VOut) -> @location(0) vec4<f32> {
     let zN = select(1.0, sign(zRaw), abs(zRaw) > 0.001);
     let nFace = normalize(vec3<f32>(uvC.x * curve, uvC.y * curve, zN));
     let nRim = normalize(vec3<f32>(f.localPos.x, f.localPos.y, 0.0001));
-    let nLocal = normalize(mix(nFace, nRim, k));
+    let nCard = normalize(mix(nFace, nRim, k));
+    let nSphere = normalize(f.localPos);
+    let nLocal = normalize(mix(nCard, nSphere, u.params.z));
     let nWorld = normalize((u.model * vec4<f32>(nLocal, 0.0)).xyz);
 
     let angle = u.light.x;

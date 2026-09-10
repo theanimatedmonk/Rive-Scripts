@@ -2,11 +2,11 @@
 
 Notes from connecting Cursor to the Rive editor MCP.
 
-**Card3D live copies** are in [shaders/](shaders/). The Rive file [shaders](https://editor.rive.app/file/shaders/2565829) is still the editor source of truth; these files are the git snapshot to read and diff.
+**Card3D / Sphere3D live copies** are in [shaders/](shaders/). The Rive file [shaders](https://editor.rive.app/file/shaders/2565829) is still the editor source of truth; these files are the git snapshot to read and diff.
 
 | Doc | What it covers |
 | --- | --- |
-| [shaders/README.md](shaders/README.md) | Card3D node + WGSL snapshots |
+| [shaders/README.md](shaders/README.md) | Card3D / Sphere3D node + WGSL snapshots |
 | [rive-mcp-scope.md](rive-mcp-scope.md) | Connection, tools, shaders, and GLTF/3D import limits |
 | [debugging-scripts.md](debugging-scripts.md) | How to list scripts, read linter errors, and check the console |
 | [drawcanvas-to-draw.md](drawcanvas-to-draw.md) | `drawCanvas` is gone — move GPU work into `draw` |
