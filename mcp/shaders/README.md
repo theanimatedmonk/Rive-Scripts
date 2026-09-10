@@ -9,6 +9,7 @@ The editor is the source of truth. Edit there via MCP (`text_editor` / `recompil
 | [Card3D.luau](Card3D.luau) | Node: rounded box mesh, lighting, foil, face view-model relay |
 | [Sphere3D.luau](Sphere3D.luau) | Node: UV sphere; face artboard on the front, cursor look-at |
 | [Card3DShader.wgsl](Card3DShader.wgsl) | Shared GPU material (gloss + holographic foil). `params.z` = 0 card / 1 sphere normals |
+| [FoilShader.wgsl](FoilShader.wgsl) | Standalone holographic foil overlay. Paste into a WGSL named `FoilShader`, then `ctx:shader('FoilShader')` |
 | [CardShadowShader.wgsl](CardShadowShader.wgsl) | Optional GPU drop-shadow pass (Card3D) |
 
 The 3D card width/height follow the **face** artboard (`face.width` / `face.height`). Sphere radius is `max(width, height) / 2`. The face artboard is mapped onto the **front** of the sphere; the back uses `edgeColor`.
