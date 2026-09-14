@@ -11,5 +11,7 @@ The editor is the source of truth. Edit there via MCP (`text_editor` / `recompil
 | [Card3DShader.wgsl](Card3DShader.wgsl) | Shared GPU material (gloss + holographic foil). `params.z` = 0 card / 1 sphere normals |
 | [FoilShader.wgsl](FoilShader.wgsl) | Standalone holographic foil overlay. Paste into a WGSL named `FoilShader`, then `ctx:shader('FoilShader')` |
 | [CardShadowShader.wgsl](CardShadowShader.wgsl) | Optional GPU drop-shadow pass (Card3D) |
+| [SandDust.luau](SandDust.luau) | Node: drifting sand / dust overlay. Drop on an artboard over a gradient |
+| [SandDustShader.wgsl](SandDustShader.wgsl) | Fullscreen grain + haze. Overlay only (`srcOver`), keeps the background |
 
 The 3D card width/height follow the **face** artboard (`face.width` / `face.height`). Sphere radius is `max(width, height) / 2`. The face artboard is mapped onto the **front** of the sphere; the back uses `edgeColor`.
