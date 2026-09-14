@@ -2,12 +2,13 @@
 // Fullscreen triangle (vertex_index 0..2), no vertex buffer.
 //
 // Bindings group 0:
-//   0: UBO 80 bytes
+//   0: UBO 96 bytes
 //      time  — x seconds, y seed, z density 0-1, w grain size 0-1
 //      drift — x wind angle rad, y speed, z turbulence 0-1, w aspect (w/h)
 //      look  — x opacity 0-1, y softness 0-1, z bottom falloff 0-1, w sparkle 0-1
 //      dust  — rgb grain color, a unused
 //      hi    — rgb highlight, w haze 0-1
+//      tip   — xy UV 0-1, z sensitivity 0-1 * hover, w radius 0-1
 //
 // Luau pack:
 //    0  time, seed, density/100, grainSize/100
@@ -15,6 +16,7 @@
 //   32  opacity/100, softness/100, falloff/100, sparkle/100
 //   48  dustColor rgb, 1
 //   64  highlight rgb, haze/100
+//   80  cursor uv.x, uv.y, sensitivity*hover, radius/100
 
 struct UBO {
     time: vec4<f32>,
@@ -22,6 +24,7 @@ struct UBO {
     look: vec4<f32>,
     dust: vec4<f32>,
     hi: vec4<f32>,
+    tip: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> u: UBO;
 
@@ -117,12 +120,22 @@ fn fs_main(f: VOut) -> @location(0) vec4<f32> {
     let spark = u.look.w;
     let hazeAmt = u.hi.w;
 
+    let cur = vec2<f32>(u.tip.x * aspect, u.tip.y);
+    let sens = u.tip.z;
+    let rad = mix(0.08, 0.62, u.tip.w);
+    let delta = uv - cur;
+    let dist = length(delta);
+    let infl = (1.0 - smoothstep(0.0, rad, dist)) * sens;
+    let away = delta / max(dist, 0.0008);
+    let spin = vec2<f32>(-away.y, away.x);
+    let push = (away * 0.28 + spin * 0.16) * infl;
+
     let dir = vec2<f32>(cos(ang), sin(ang));
     let swirl = vec2<f32>(
         vnoise(uv * 2.4 + vec2<f32>(t * 0.11, seed)),
         vnoise(uv * 2.4 + vec2<f32>(seed + 4.0, t * 0.09)),
     );
-    let wind = dir * t * spd * 0.55 + (swirl * 2.0 - vec2<f32>(1.0, 1.0)) * turb * 0.18;
+    let wind = dir * t * spd * 0.55 + (swirl * 2.0 - vec2<f32>(1.0, 1.0)) * turb * 0.18 + push;
 
     let uv1 = uv + wind;
     let uv2 = uv * 1.7 + wind * 0.55 + vec2<f32>(seed, 0.0);
@@ -139,8 +152,11 @@ fn fs_main(f: VOut) -> @location(0) vec4<f32> {
 
     let bot = mix(1.0, 1.0 - f.uv.y, fall);
     let veil = hazeSoft * hazeAmt * bot;
-    let spec = (g1.x * 0.55 + g2.x * 0.35 + g3.x * 0.28) * dens * bot;
-    let glow = (g1.y + g2.y * 0.7 + g3.y * 0.5) * spark * bot;
+    var spec = (g1.x * 0.55 + g2.x * 0.35 + g3.x * 0.28) * dens * bot;
+    var glow = (g1.y + g2.y * 0.7 + g3.y * 0.5) * spark * bot;
+    let wake = infl * infl * dens * bot;
+    spec += wake * 0.55;
+    glow += wake * 0.8;
 
     let grain = mix(spec, smoothstep(0.0, mix(0.15, 1.2, soft), spec), 0.65);
     let rgb = u.dust.rgb * (veil * 0.55 + grain * 0.9) + u.hi.rgb * glow;

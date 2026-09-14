@@ -1,10 +1,13 @@
 -- SandDust node: drives SandDustShader (WGSL in the Shaders panel).
 -- Overlay of drifting sand / dust motes. Drop on an artboard over a gradient.
 -- Width / height size the GPU canvas (defaults match the dither artboard).
+-- cursorSensitivity (0-100) how hard grains scatter from the pointer.
+-- cursorRadius (0-100) how wide that wake is.
 
-local UBO_SIZE = 80
+local UBO_SIZE = 96
 local DEFAULT_W = 1220
 local DEFAULT_H = 567
+local PTR_SMOOTH = 14
 
 type SandDust = {
   width: Input<number>,
@@ -20,6 +23,8 @@ type SandDust = {
   sparkle: Input<number>,
   haze: Input<number>,
   seed: Input<number>,
+  cursorSensitivity: Input<number>,
+  cursorRadius: Input<number>,
   dustColor: Input<Color>,
   highlightColor: Input<Color>,
   _gpu: GPUCanvas?,
@@ -27,11 +32,28 @@ type SandDust = {
   _ubo: GPUBuffer?,
   _ubuf: buffer,
   _imgSamp: ImageSampler,
+  _hitPath: Path,
+  _hitPaint: Paint,
+  _hitW: number,
+  _hitH: number,
   _ctx: Context?,
   _t: number,
   _gpuW: number,
   _gpuH: number,
+  _hover: boolean,
+  _tgtX: number,
+  _tgtY: number,
+  _ptrX: number,
+  _ptrY: number,
+  _ptrAmt: number,
 }
+
+local function num(v: any, fallback: number): number
+  if type(v) == 'number' then
+    return v
+  end
+  return fallback
+end
 
 local function dim(v: any, fallback: number): number
   local n = num(v, fallback)
@@ -39,6 +61,11 @@ local function dim(v: any, fallback: number): number
     return fallback
   end
   return n
+end
+
+local function easeToward(current: number, target: number, dt: number): number
+  local a = 1 - math.exp(-PTR_SMOOTH * math.max(dt, 0))
+  return current + (target - current) * a
 end
 
 local function initGpu(self: SandDust, ctx: Context): boolean
@@ -98,10 +125,31 @@ local function ensureSize(self: SandDust)
   self._gpuH = h
 end
 
+local function ensureHit(self: SandDust, w: number, h: number)
+  if self._hitW == w and self._hitH == h then
+    return
+  end
+  local path = self._hitPath
+  path:reset()
+  local hw = w * 0.5
+  local hh = h * 0.5
+  path:moveTo(Vector.xy(-hw, -hh))
+  path:lineTo(Vector.xy(hw, -hh))
+  path:lineTo(Vector.xy(hw, hh))
+  path:lineTo(Vector.xy(-hw, hh))
+  path:close()
+  self._hitW = w
+  self._hitH = h
+end
+
 local function init(self: SandDust, ctx: Context): boolean
   self._ctx = ctx
   self._t = 0
   self._imgSamp = ImageSampler('clamp', 'clamp', 'bilinear')
+  self._hitPaint = Paint.with({
+    style = 'fill',
+    color = Color.rgba(0, 0, 0, 1),
+  })
   initGpu(self, ctx)
   return true
 end
@@ -110,15 +158,63 @@ local function update(self: SandDust) end
 
 local function advance(self: SandDust, seconds: number): boolean
   self._t += seconds
+  self._ptrX = easeToward(self._ptrX, self._tgtX, seconds)
+  self._ptrY = easeToward(self._ptrY, self._tgtY, seconds)
+  local want = 0
+  if self._hover then
+    want = 1
+  end
+  self._ptrAmt = easeToward(self._ptrAmt, want, seconds)
   return true
+end
+
+local function setPointer(self: SandDust, event: PointerEvent)
+  event:hit()
+  local w = math.max(8, self._gpuW)
+  local h = math.max(8, self._gpuH)
+  local uvx = math.clamp(event.position.x / w + 0.5, 0, 1)
+  local uvy = math.clamp(event.position.y / h + 0.5, 0, 1)
+  if self._ptrAmt < 0.05 then
+    self._ptrX = uvx
+    self._ptrY = uvy
+  end
+  self._tgtX = uvx
+  self._tgtY = uvy
+  self._hover = true
+  local ctx = self._ctx
+  if ctx then
+    ctx:markNeedsUpdate()
+  end
+end
+
+local function pointerMove(self: SandDust, event: PointerEvent)
+  setPointer(self, event)
+end
+
+local function pointerDown(self: SandDust, event: PointerEvent)
+  setPointer(self, event)
+end
+
+local function pointerExit(self: SandDust, event: PointerEvent)
+  self._hover = false
+  local ctx = self._ctx
+  if ctx then
+    ctx:markNeedsUpdate()
+  end
 end
 
 local function draw(self: SandDust, renderer: Renderer)
   ensureSize(self)
+  if buffer.len(self._ubuf) < UBO_SIZE then
+    local ctx = self._ctx
+    if ctx then
+      initGpu(self, ctx)
+    end
+  end
   local gc = self._gpu
   local pipe = self._pipe
   local ubo = self._ubo
-  if not (gc and pipe and ubo) then
+  if gc == nil or pipe == nil or ubo == nil then
     return
   end
   if buffer.len(self._ubuf) < UBO_SIZE then
@@ -129,6 +225,9 @@ local function draw(self: SandDust, renderer: Renderer)
 
   local w = self._gpuW
   local h = self._gpuH
+  ensureHit(self, w, h)
+  renderer:drawPath(self._hitPath, self._hitPaint)
+
   local buf = self._ubuf
   buffer.writef32(buf, 0, self._t)
   buffer.writef32(buf, 4, num(self.seed, 1))
@@ -158,6 +257,10 @@ local function draw(self: SandDust, renderer: Renderer)
   buffer.writef32(buf, 68, hc[2])
   buffer.writef32(buf, 72, hc[3])
   buffer.writef32(buf, 76, num(self.haze, 35) / 100)
+  buffer.writef32(buf, 80, self._ptrX)
+  buffer.writef32(buf, 84, self._ptrY)
+  buffer.writef32(buf, 88, num(self.cursorSensitivity, 55) / 100 * self._ptrAmt)
+  buffer.writef32(buf, 92, num(self.cursorRadius, 40) / 100)
   ubo:write(buf)
 
   local bg = GPUBindGroup.new({
@@ -200,6 +303,8 @@ return function(): Node<SandDust>
     sparkle = 28,
     haze = 35,
     seed = 1,
+    cursorSensitivity = 55,
+    cursorRadius = 40,
     dustColor = Color.rgb(232, 209, 173),
     highlightColor = Color.rgb(255, 245, 224),
     _gpu = nil,
@@ -207,13 +312,29 @@ return function(): Node<SandDust>
     _ubo = nil,
     _ubuf = buffer.create(UBO_SIZE),
     _imgSamp = ImageSampler('clamp', 'clamp', 'bilinear'),
+    _hitPath = Path.new(),
+    _hitPaint = Paint.with({
+      style = 'fill',
+      color = Color.rgba(0, 0, 0, 1),
+    }),
+    _hitW = 0,
+    _hitH = 0,
     _ctx = nil,
     _t = 0,
     _gpuW = DEFAULT_W,
     _gpuH = DEFAULT_H,
+    _hover = false,
+    _tgtX = 0.5,
+    _tgtY = 0.5,
+    _ptrX = 0.5,
+    _ptrY = 0.5,
+    _ptrAmt = 0,
     init = init,
     update = update,
     advance = advance,
     draw = draw,
+    pointerMove = pointerMove,
+    pointerDown = pointerDown,
+    pointerExit = pointerExit,
   }
 end
