@@ -1,15 +1,18 @@
 -- SandDust node: drives SandDustShader (WGSL in the Shaders panel).
 -- Overlay of drifting sand / dust motes. Drop on an artboard over a gradient.
 -- Width / height size the GPU canvas (defaults match the dither artboard).
--- cursorSensitivity (0-100) ripple strength. cursorRadius (0-100) trail width.
--- dustColor tints grains. hazeColor tints the veil.
+-- cursorSensitivity (0-100) how strongly dust parts around the pointer.
+-- cursorRadius (0-100) how wide that soft field is.
+-- dustColor tints grains. hazeColor1 / hazeColor2 / hazeColor3 split the veil.
 
-local UBO_SIZE = 128
+local UBO_SIZE = 176
 local DEFAULT_W = 1220
 local DEFAULT_H = 567
 local PTR_SMOOTH = 16
-local LAG1_SMOOTH = 7
-local LAG2_SMOOTH = 3.5
+local LAG1_SMOOTH = 8
+local LAG2_SMOOTH = 4.5
+local LAG3_SMOOTH = 2.6
+local LAG4_SMOOTH = 1.5
 local VEL_SMOOTH = 20
 local VEL_MAX = 6
 
@@ -30,7 +33,9 @@ type SandDust = {
   cursorSensitivity: Input<number>,
   cursorRadius: Input<number>,
   dustColor: Input<Color>,
-  hazeColor: Input<Color>,
+  hazeColor1: Input<Color>,
+  hazeColor2: Input<Color>,
+  hazeColor3: Input<Color>,
   _gpu: GPUCanvas?,
   _pipe: GPUPipeline?,
   _ubo: GPUBuffer?,
@@ -53,6 +58,10 @@ type SandDust = {
   _lag1Y: number,
   _lag2X: number,
   _lag2Y: number,
+  _lag3X: number,
+  _lag3Y: number,
+  _lag4X: number,
+  _lag4Y: number,
   _ptrAmt: number,
   _velX: number,
   _velY: number,
@@ -180,6 +189,10 @@ local function advance(self: SandDust, seconds: number): boolean
     self._lag1Y = self._ptrY
     self._lag2X = self._ptrX
     self._lag2Y = self._ptrY
+    self._lag3X = self._ptrX
+    self._lag3Y = self._ptrY
+    self._lag4X = self._ptrX
+    self._lag4Y = self._ptrY
   end
   self._t += seconds
   self._ptrX = easeRate(self._ptrX, self._tgtX, seconds, PTR_SMOOTH)
@@ -188,6 +201,10 @@ local function advance(self: SandDust, seconds: number): boolean
   self._lag1Y = easeRate(self._lag1Y, self._ptrY, seconds, LAG1_SMOOTH)
   self._lag2X = easeRate(self._lag2X, self._lag1X, seconds, LAG2_SMOOTH)
   self._lag2Y = easeRate(self._lag2Y, self._lag1Y, seconds, LAG2_SMOOTH)
+  self._lag3X = easeRate(self._lag3X, self._lag2X, seconds, LAG3_SMOOTH)
+  self._lag3Y = easeRate(self._lag3Y, self._lag2Y, seconds, LAG3_SMOOTH)
+  self._lag4X = easeRate(self._lag4X, self._lag3X, seconds, LAG4_SMOOTH)
+  self._lag4Y = easeRate(self._lag4Y, self._lag3Y, seconds, LAG4_SMOOTH)
   local want = 0
   if self._hover then
     want = 1
@@ -227,6 +244,10 @@ local function setPointer(self: SandDust, event: PointerEvent)
     self._lag1Y = uvy
     self._lag2X = uvx
     self._lag2Y = uvy
+    self._lag3X = uvx
+    self._lag3Y = uvy
+    self._lag4X = uvx
+    self._lag4Y = uvy
     self._lastTgtX = uvx
     self._lastTgtY = uvy
     self._velX = 0
@@ -303,13 +324,13 @@ local function draw(self: SandDust, renderer: Renderer)
   buffer.writef32(buf, 52, dc[2])
   buffer.writef32(buf, 56, dc[3])
   buffer.writef32(buf, 60, 1)
-  local hz = { 0.73, 0.52, 0.36, 1 }
-  if self.hazeColor ~= nil then
-    hz = Color.toFloat(self.hazeColor)
+  local h1 = { 0.36, 0.54, 0.84, 1 }
+  if self.hazeColor1 ~= nil then
+    h1 = Color.toFloat(self.hazeColor1)
   end
-  buffer.writef32(buf, 64, hz[1])
-  buffer.writef32(buf, 68, hz[2])
-  buffer.writef32(buf, 72, hz[3])
+  buffer.writef32(buf, 64, h1[1])
+  buffer.writef32(buf, 68, h1[2])
+  buffer.writef32(buf, 72, h1[3])
   buffer.writef32(buf, 76, num(self.haze, 35) / 100)
   buffer.writef32(buf, 80, self._ptrX)
   buffer.writef32(buf, 84, self._ptrY)
@@ -323,6 +344,26 @@ local function draw(self: SandDust, renderer: Renderer)
   buffer.writef32(buf, 116, self._lag1Y)
   buffer.writef32(buf, 120, self._lag2X)
   buffer.writef32(buf, 124, self._lag2Y)
+  buffer.writef32(buf, 128, self._lag3X)
+  buffer.writef32(buf, 132, self._lag3Y)
+  buffer.writef32(buf, 136, self._lag4X)
+  buffer.writef32(buf, 140, self._lag4Y)
+  local h2 = { 0.69, 0.44, 0.82, 1 }
+  if self.hazeColor2 ~= nil then
+    h2 = Color.toFloat(self.hazeColor2)
+  end
+  buffer.writef32(buf, 144, h2[1])
+  buffer.writef32(buf, 148, h2[2])
+  buffer.writef32(buf, 152, h2[3])
+  buffer.writef32(buf, 156, 1)
+  local h3 = { 0.73, 0.52, 0.36, 1 }
+  if self.hazeColor3 ~= nil then
+    h3 = Color.toFloat(self.hazeColor3)
+  end
+  buffer.writef32(buf, 160, h3[1])
+  buffer.writef32(buf, 164, h3[2])
+  buffer.writef32(buf, 168, h3[3])
+  buffer.writef32(buf, 172, 1)
   ubo:write(buf)
 
   local bg = GPUBindGroup.new({
@@ -368,7 +409,9 @@ return function(): Node<SandDust>
     cursorSensitivity = 55,
     cursorRadius = 40,
     dustColor = Color.rgb(232, 209, 173),
-    hazeColor = Color.rgb(186, 132, 92),
+    hazeColor1 = Color.rgb(92, 138, 214),
+    hazeColor2 = Color.rgb(176, 112, 210),
+    hazeColor3 = Color.rgb(186, 132, 92),
     _gpu = nil,
     _pipe = nil,
     _ubo = nil,
@@ -394,6 +437,10 @@ return function(): Node<SandDust>
     _lag1Y = 0.5,
     _lag2X = 0.5,
     _lag2Y = 0.5,
+    _lag3X = 0.5,
+    _lag3Y = 0.5,
+    _lag4X = 0.5,
+    _lag4Y = 0.5,
     _ptrAmt = 0,
     _velX = 0,
     _velY = 0,
