@@ -2,7 +2,7 @@
 // Fullscreen triangle (vertex_index 0..2), no vertex buffer.
 //
 // Bindings group 0:
-//   0: UBO 176 bytes
+//   0: UBO 160 bytes
 //      time  — x seconds, y seed, z density 0-1, w grain size 0-1
 //      drift — x wind angle rad, y speed, z turbulence 0-1, w aspect (w/h)
 //      look  — x opacity 0-1, y softness 0-1, z bottom falloff 0-1, w sparkle 0-1
@@ -13,7 +13,6 @@
 //      wake  — xy lag1 UV, zw lag2 UV
 //      hist  — xy lag3 UV, zw lag4 UV
 //      wash  — rgb hazeColor2, a unused
-//      dusk  — rgb hazeColor3, a unused
 //
 // Luau pack:
 //    0  time, seed, density/100, grainSize/100
@@ -26,7 +25,6 @@
 //  112  lag1.xy, lag2.xy
 //  128  lag3.xy, lag4.xy
 //  144  hazeColor2 rgb, 1
-//  160  hazeColor3 rgb, 1
 
 struct UBO {
     time: vec4<f32>,
@@ -39,7 +37,6 @@ struct UBO {
     wake: vec4<f32>,
     hist: vec4<f32>,
     wash: vec4<f32>,
-    dusk: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> u: UBO;
 
@@ -200,9 +197,8 @@ fn fs_main(f: VOut) -> @location(0) vec4<f32> {
     let k = 5.2;
     let e1 = exp(n1 * k);
     let e2 = exp(n2 * k);
-    let e3 = exp(n3 * k);
-    let es = max(e1 + e2 + e3, 0.0001);
-    let hazeRgb = u.mist.rgb * (e1 / es) + u.wash.rgb * (e2 / es) + u.dusk.rgb * (e3 / es);
+    let es = max(e1 + e2, 0.0001);
+    let hazeRgb = u.mist.rgb * (e1 / es) + u.wash.rgb * (e2 / es);
 
     let bot = mix(1.0, 1.0 - f.uv.y, fall);
     let veil = hazeSoft * hazeAmt * bot;

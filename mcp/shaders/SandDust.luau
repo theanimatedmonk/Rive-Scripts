@@ -3,9 +3,9 @@
 -- Width / height size the GPU canvas (defaults match the dither artboard).
 -- cursorSensitivity (0-100) how strongly dust parts around the pointer.
 -- cursorRadius (0-100) how wide that soft field is.
--- dustColor tints grains. hazeColor1 / hazeColor2 / hazeColor3 split the veil.
+-- dustColor tints grains. hazeColor1 / hazeColor2 split the veil.
 
-local UBO_SIZE = 176
+local UBO_SIZE = 160
 local DEFAULT_W = 1220
 local DEFAULT_H = 567
 local PTR_SMOOTH = 16
@@ -35,7 +35,6 @@ type SandDust = {
   dustColor: Input<Color>,
   hazeColor1: Input<Color>,
   hazeColor2: Input<Color>,
-  hazeColor3: Input<Color>,
   _gpu: GPUCanvas?,
   _pipe: GPUPipeline?,
   _ubo: GPUBuffer?,
@@ -280,7 +279,7 @@ end
 
 local function draw(self: SandDust, renderer: Renderer)
   ensureSize(self)
-  if buffer.len(self._ubuf) < UBO_SIZE then
+  if buffer.len(self._ubuf) ~= UBO_SIZE then
     local ctx = self._ctx
     if ctx then
       initGpu(self, ctx)
@@ -292,7 +291,7 @@ local function draw(self: SandDust, renderer: Renderer)
   if gc == nil or pipe == nil or ubo == nil then
     return
   end
-  if buffer.len(self._ubuf) < UBO_SIZE then
+  if buffer.len(self._ubuf) ~= UBO_SIZE then
     self._ubuf = buffer.create(UBO_SIZE)
     ubo = GPUBuffer.new({ size = UBO_SIZE, usage = 'uniform' })
     self._ubo = ubo
@@ -356,14 +355,6 @@ local function draw(self: SandDust, renderer: Renderer)
   buffer.writef32(buf, 148, h2[2])
   buffer.writef32(buf, 152, h2[3])
   buffer.writef32(buf, 156, 1)
-  local h3 = { 0.73, 0.52, 0.36, 1 }
-  if self.hazeColor3 ~= nil then
-    h3 = Color.toFloat(self.hazeColor3)
-  end
-  buffer.writef32(buf, 160, h3[1])
-  buffer.writef32(buf, 164, h3[2])
-  buffer.writef32(buf, 168, h3[3])
-  buffer.writef32(buf, 172, 1)
   ubo:write(buf)
 
   local bg = GPUBindGroup.new({
@@ -411,7 +402,6 @@ return function(): Node<SandDust>
     dustColor = Color.rgb(232, 209, 173),
     hazeColor1 = Color.rgb(92, 138, 214),
     hazeColor2 = Color.rgb(176, 112, 210),
-    hazeColor3 = Color.rgb(186, 132, 92),
     _gpu = nil,
     _pipe = nil,
     _ubo = nil,
